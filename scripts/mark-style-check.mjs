@@ -250,6 +250,44 @@ if (effectExpr) {
   check('行为：重叠区域只有一个色类',
     COLOR_NAMES.filter((c) => spans[2].classList.contains('is-' + c)).length === 1);
   check('行为：非重叠部分保留前一条', spans[0].classList.contains('is-amber'));
+/* ══════ D2. 行为：部分覆盖只画那一段 ══════════════════════════════
+   「选中几个字，标出的却多出半句」是用户直接投诉的问题。
+   旧实现按文本项整块染色（一项被沾到一点就整项上色），等于按 item 边界外扩。
+   现在整项覆盖走 border-bottom，部分覆盖走 ::after + 三个自定义属性。
+   这两条必须真跑一遍 effect 才测得到 —— 结构断言看不出「覆盖百分比算对没有」。 */
+
+{
+  // 一项 4 个字（0..4），标注只覆盖后 2 个字
+  const partial = [makeSpan({ start: 0, end: 4 })];
+  const marksP = [{ id: 'p1', page: 0, offset: 2, length: 2, color: 'amber' }];
+  runEffect({ children: partial }, { text: '一二三四', spans: [] }, marksP, 0, COLOR_NAMES);
+
+  const span = partial[0];
+  check('D2 部分覆盖不进整项染色', !span.classList.contains('is-marked'),
+    '被当成整项了');
+  check('D2 部分覆盖挂上 partial 类', span.classList.contains('is-marked-partial'));
+  // 左端 = 2/4 = 50%，宽度 = 2/4 = 50%
+  check('D2 左端按字符比例（50%）', span._get('--mk-l') === '50.000%', span._get('--mk-l'));
+  check('D2 宽度按字符比例（50%）', span._get('--mk-w') === '50.000%', span._get('--mk-w'));
+  check('D2 颜色用 amber 变量', span._get('--mk-c') === 'var(--dr-amber)', span._get('--mk-c'));
+
+  // 同一项上先部分后整项，残留的自定义属性必须被清掉，否则旧线段会留着
+  const reuse = [makeSpan({ start: 0, end: 4 })];
+  runEffect({ children: reuse }, { text: '一二三四', spans: [] },
+    [{ id: 'a', page: 0, offset: 1, length: 2, color: 'blue' }], 0, COLOR_NAMES);
+  const hadLeft = reuse[0]._get('--mk-l');
+  runEffect({ children: reuse }, { text: '一二三四', spans: [] },
+    [{ id: 'b', page: 0, offset: 0, length: 4, color: 'green' }], 0, COLOR_NAMES);
+  check('D2 改进整项后旧线段属性被清掉', reuse[0]._get('--mk-l') === '',
+    '残留 ' + hadLeft + ' -> ' + reuse[0]._get('--mk-l'));
+
+  // 整项覆盖仍然走 border-bottom 那条路（不能为了部分覆盖把它丢掉）
+  const whole = [makeSpan({ start: 0, end: 4 })];
+  runEffect({ children: whole }, { text: '一二三四', spans: [] },
+    [{ id: 'c', page: 0, offset: 0, length: 4, color: 'rose' }], 0, COLOR_NAMES);
+  check('D2 整项仍走 is-marked', whole[0].classList.contains('is-marked'));
+  check('D2 整项不再走 partial', !whole[0].classList.contains('is-marked-partial'));
+}
 }
 
 /* ══════ D. 关键：垂直补偿不能把线推到字上 ══════════════════════════ */
