@@ -87,31 +87,40 @@ window.__ModuleLoader__.load({
 .dr-textlayer{position:absolute;inset:0;overflow:hidden;line-height:1;text-align:initial;transform-origin:0 0;z-index:2}
 .dr-textlayer span{position:absolute;white-space:pre;color:transparent;transform-origin:0 0;cursor:text}
 .dr-textlayer span::selection{background:color-mix(in srgb,var(--dsw-alias-brand-primary) 38%,transparent)}
-/* ── 标注：底部划线，画在**文字 span 自己身上** ─────────────────────
-   历史：上一版在文字之上另铺一层色块，用 mix-blend-mode:multiply —— 颜色压在
-   字形上，笔画被糊掉（用户原话「颜色叠在文字上面影响阅读」）。
+/* ── 标注：底部划线，画在**文字盒之外**（这是本文件最容易被"优化"坏的一段）──
 
-   改成划线后先试过「旁边另画一层 .dr-mark」，结果**线跑到文字中间**：
-   文字层的 span 会做垂直补偿（delta，见 PageCanvas 里那段），而高亮框用的是
-   未补偿的原始 box。两套坐标一错开，线就压字。
+   ## 三代做法，两代翻车
 
-   所以现在不另画：给 span 自己加 border-bottom。
-   span 在哪，线就在哪 —— 没有第二次对位，也不可能错位。
+   1. 色块铺在文字上（mix-blend-mode:multiply）→ 笔画被糊，用户说「颜色叠在
+      文字上面影响阅读」。
+   2. 旁边另铺一层 .dr-mark → 线跑到字中间。span 有垂直补偿（delta），
+      那层用的是未补偿的原始 box，两套坐标一错开就压字。
+   3. 线长在 span 自己身上（border-bottom）→ 对位问题没了，但**位置又错了**：
+      border-bottom 画在**盒子底边的内侧**，而文字层 span 是 line-height:1，
+      盒高就等于 fontSize —— 中文的 descender（下伸笔画）会溢出盒底，
+      字号越大溢出越多。于是 2.5px 的线正好横穿字形下缘。
+      大标题最明显（「设为…」那行线直接切进字里），正文也切字底。
 
-   为什么这次可以用 border-bottom（之前说不能用）：当时担心的是 1px 高的盒子里
-   border 占空间把线挤没；但 span 的高度是 fontSize 撑起来的（十几 px），
-   2.5px 的 border 完全放得下。而且 border 会撑高盒模型，正好落在字的下沿之下。 */
-.dr-textlayer span.is-marked{border-bottom:2.5px solid transparent;padding-bottom:1px}
-.dr-textlayer span.is-marked.is-amber{border-bottom-color:var(--dr-amber)}
-.dr-textlayer span.is-marked.is-green{border-bottom-color:var(--dr-green)}
-.dr-textlayer span.is-marked.is-blue{border-bottom-color:var(--dr-blue)}
-.dr-textlayer span.is-marked.is-rose{border-bottom-color:var(--dr-rose)}
-/* 部分覆盖：一段文字项里只有几个字被标。
-   border-bottom 只能画整条，所以这里改用 ::after 画一段。
-   位置用**百分比**而不是像素：span 上带着 scaleX（见渲染 effect），
-   getBoundingClientRect 量到的像素是缩放后的，直接写 px 会被再乘一次缩放。
-   百分比是比例，与缩放无关 —— 这是这里唯一不会错位的方式。 */
-.dr-textlayer span.is-marked-partial::after{content:'';position:absolute;left:var(--mk-l,0);width:var(--mk-w,0);bottom:-1px;height:2.5px;background:var(--mk-c,var(--dr-amber));pointer-events:none}
+   ## 现在的做法：::after 画到盒子外侧
+
+   线的**横向**用百分比（span 带着 scaleX，像素值会被再乘一次缩放，百分比不会）。
+   线的**纵向**用 em 往下让（em 相对 span 自己的字号，字号越大让得越多）。
+   两者都是比例量，所以缩放、字号变化都不会让线重新爬回字里。
+
+   bottom 必须让到 descender 之外：本行字号约 15~22px，下伸笔画溢出盒底
+   约 0.1~0.15em，所以让 0.18em 才稳（不是 1px 那种凭感觉的微调 ——
+   上一版 padding-bottom:1px 就是这么在标题上失效的）。
+   线粗也用 em 夹一个 2px 下限，标题的线才不会看起来比正文还细。 */
+.dr-textlayer span.is-marked::after,
+.dr-textlayer span.is-marked-partial::after{content:'';position:absolute;left:var(--mk-l,0);width:var(--mk-w,100%);bottom:-0.18em;height:max(2px,0.085em);background:var(--mk-c,var(--dr-amber));border-radius:1px;pointer-events:none}
+.dr-textlayer span.is-marked.is-amber,
+.dr-textlayer span.is-marked-partial.is-amber{--mk-c:var(--dr-amber)}
+.dr-textlayer span.is-marked.is-green,
+.dr-textlayer span.is-marked-partial.is-green{--mk-c:var(--dr-green)}
+.dr-textlayer span.is-marked.is-blue,
+.dr-textlayer span.is-marked-partial.is-blue{--mk-c:var(--dr-blue)}
+.dr-textlayer span.is-marked.is-rose,
+.dr-textlayer span.is-marked-partial.is-rose{--mk-c:var(--dr-rose)}
 
 .dr-loading{display:flex;align-items:center;justify-content:center;flex:1;color:var(--dsw-alias-label-secondary);font-size:13px;gap:12px;flex-direction:column;padding:48px;text-align:center;line-height:1.6}
 .dr-spinner{width:18px;height:18px;border-radius:50%;border:2px solid var(--dsw-alias-border-l2);border-top-color:var(--dsw-alias-brand-primary);animation:dr-spin .8s linear infinite}

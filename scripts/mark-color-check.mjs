@@ -103,8 +103,11 @@ check('B 引文条不再用固定品牌色',
 /* ══════ C. 对应关系：同一变量，不是两个相似的色 ══════════════════════ */
 
 for (const color of COLORS) {
-  // 正文划线
-  const textRule = src.match(new RegExp('\\.dr-textlayer span\\.is-marked\\.is-' + color + '\\{border-bottom-color:([^}]+)\\}'));
+  // 正文划线：颜色现在从自定义属性 --mk-c 进来（::after 只有一条规则，
+  // 四个色各自只声明 --mk-c），所以取的是那条 `{--mk-c:var(--dr-x)}`。
+  const textRule = src.match(
+    new RegExp('\\.is-marked\\.is-' + color + ',\\s*\\n\\.dr-textlayer span\\.is-marked-partial\\.is-' + color + '\\{--mk-c:([^}]+)\\}'),
+  ) || src.match(new RegExp('span\\.is-marked[^}]*\\.is-' + color + '\\{--mk-c:([^}]+)\\}'));
   // 侧栏卡片左条
   const cardRule = src.match(new RegExp('\\.dr-note\\.is-' + color + '\\{border-left:3px solid ([^;]+);'));
   check('C ' + color + ' 正文划线用变量',

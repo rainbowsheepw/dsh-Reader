@@ -66,9 +66,26 @@ const cssStart = src.indexOf('/* ── 标注：底部划线');
 const cssEnd = src.indexOf('.dr-loading{display:flex');
 const css = src.slice(cssStart, cssEnd);
 
-check('样式：划线在 span 上', css.includes('.dr-textlayer span.is-marked'));
-check('样式：用 border-bottom 画线', css.includes('border-bottom:2.5px solid transparent'));
-check('样式：不再用 ::after 独立层', !css.includes('.dr-mark::after'));
+// 画线方式迭代了四代，断言必须跟到「现在」这一代：
+//   1 色块铺字上 → 糊字；2 另铺一层 .dr-mark → 坐标错位压字；
+//   3 border-bottom 画在盒内 → 字大时横穿 descender，就是用户报的「遮挡文字」；
+//   4 现在：::after 画到盒外，纵向用 em 跟随字号。
+// 这里每一条都对应一次真实故障，删任何一条都等于允许那个故障回来。
+check('样式：划线在 span 上（::after，不是独立层）',
+  /\.dr-textlayer span\.is-marked::after/.test(css), '未找到 ::after 划线');
+check('样式：不用 border-bottom 画线（盒内画线会压 descender）',
+  !/span\.is-marked\{[^}]*border-bottom/.test(css), '仍在用 border-bottom');
+check('样式：不再用 .dr-mark 独立层', !css.includes('.dr-mark::after'));
+check('样式：线的横向用百分比（span 带 scaleX，像素会被二次缩放）',
+  /left:var\(--mk-l,0\)/.test(css) && /width:var\(--mk-w,100%\)/.test(css), '未用百分比');
+check('样式：线的纵向让到盒外用 em（字号越大让得越多）',
+  /bottom:-0\.18em/.test(css), '未用 em 让位');
+check('样式：让位量够过 descender（≥0.15em）', (() => {
+  const m = css.match(/bottom:-([0-9.]+)em/);
+  return Boolean(m) && Number(m[1]) >= 0.15;
+})(), '让得太少，线会压进下伸笔画');
+check('样式：线粗有 2px 下限（标题不至于比正文更细）',
+  /height:max\(2px,0\.085em\)/.test(css), '未夹下限');
 // 注释里提到历史做法是允许的（那里写着「上一版用 mix-blend-mode」），
 // 但不能有**真的 CSS 声明**。
 check('样式：没有 mix-blend-mode 声明', !/[\n;{]\s*mix-blend-mode\s*:/.test(css.replace(/\/\*[^]*?\*\//g, '')));
@@ -78,8 +95,10 @@ for (const color of ['amber', 'green', 'blue', 'rose']) {
   // 色值现在是 CSS 变量（单一来源，见 mark-color-check.mjs）。
   // 这里断「引用变量」而不是「写了十六进制」—— 断言写死在色值上会在换色时失效
   // （它原来就是因此红掉的）。变量必须**定义在同一份源码里**，否则等于没定义。
+  // 颜色改为写 CSS 自定义属性 --mk-c（::after 只此一条规则，颜色从变量进来）。
+  // 仍然断「引用变量」而不是十六进制：写死色值会在换色时失效。
   const rule = css.match(
-    new RegExp('\\.is-marked\\.is-' + color + '\\{border-bottom-color:(var\\(--dr-' + color + '\\))\\}', 'i'),
+    new RegExp('\\{--mk-c:var\\(--dr-' + color + '\\)\\}', 'i'),
   );
   check('样式：' + color + ' 有实色线', Boolean(rule), rule ? rule[1] : '缺');
   check('样式：' + color + ' 的变量已定义',
@@ -301,6 +320,44 @@ check('防线：span 的 top 补偿仍在（文字与 PDF 对齐的前提）',
   src.includes("span.style.top = box[1] + Math.min(delta, height * 0.4) + 'px'"));
 check('防线：补偿值被夹在行高的 40% 以内（防止极端字体撑飞）',
   src.includes('Math.min(delta, height * 0.4)'));
+
+/* ══════ D3. 几何验算：线下沿必须在字形溢出之外 ══════════════════════
+   用户报「标线遮挡文字」两次。第一次是坐标层错位（上面 D 段拦住的）；
+   第二次是**纵向量不够**：线画在盒内，字号越大 descender 溢出越多，
+   固定 1px 的让位在标题上必然失效。样式断言只能证明「写了 em」，
+   不能证明「让得够」——所以这里按真实字号算一遍几何。
+
+   模型（与 PageCanvas 渲染段一致）：
+     · line-height:1 → 盒高 = fontSize
+     · 字形 descender 溢出盒底的经验上限 = 0.12em（中文字体为主）
+     · 线下沿 = 盒底 + 让位量
+   判据：对 12~40px 的每个字号，(让位量 − 0.12em) 必须 > 0。 */
+{
+  const letEm = (() => {
+    const m = css.match(/bottom:-([0-9.]+)em/);
+    return m ? Number(m[1]) : null;
+  })();
+  check('D3 能取到线的让位量（em）', letEm !== null, '未找到 bottom:-Nem');
+
+  if (letEm !== null) {
+    const DESCENDER_EM = 0.12;
+    const sizes = [12, 13, 15, 18, 22, 26, 30, 36, 40];
+    const failures = sizes.filter((fs) => {
+      const letOut = letEm * fs;                 // 线下沿距盒底（px）
+      const overflow = DESCENDER_EM * fs;        // 字形溢出盒底（px）
+      return letOut - overflow <= 0;
+    });
+    check('D3 所有字号下线都不压 descender', failures.length === 0,
+      failures.length ? '在这些字号上压字：' + failures.join(',') + 'px' : '');
+    check('D3 余量是比例量（不随字号衰减）', letEm > DESCENDER_EM,
+      letEm + 'em vs ' + DESCENDER_EM + 'em');
+
+    // 反面：旧实现的固定 1px 让位在标题上一定压字，用于确认这条断言真的会红
+    const oldStyleFail = 36;
+    check('D3 反证：固定 1px 让位在 36px 标题上确实会压字',
+      1 - DESCENDER_EM * oldStyleFail <= 0, '反证失效，判据不可信');
+  }
+}
 
 /* ══════ E. 通用防线：CSS 模板字符串里不得出现反引号 ══════════════
    这条坑踩了两次：
