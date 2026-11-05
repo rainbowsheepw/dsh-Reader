@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [22, 24]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # 本项目没有运行时依赖（pdf.js 已 vendored），所以不需要 install。
+      # 回归脚本只用 Node 内置模块 + 本地 lib/，全程离线可跑。
+      - name: Run regression suite
+        run: node scripts/run-all.mjs
+
+      - name: Syntax check
+        run: npm run check:syntax

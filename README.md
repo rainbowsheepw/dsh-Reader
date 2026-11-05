@@ -2,6 +2,10 @@
 
 [English](README.en.md) · 简体中文
 
+[![CI](https://github.com/YOUR_NAME/dsh-reader/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_NAME/dsh-reader/actions/workflows/ci.yml)
+![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-blue)
+
 一个 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）插件：**宫格书架 + PDF 精读**。
 为长时间读技术书（教材、论文、手册）设计，不是走马观花用的预览器。
 
