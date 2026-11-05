@@ -191,6 +191,15 @@ function collectDeclared(text) {
     }
     for (const ident of text.slice(match.index, index).matchAll(IDENT)) names.add(ident[0]);
   }
+  // `catch (error)` / `catch {` —— catch 的绑定名同样是本作用域的声明。
+  //
+  // 漏掉这一步会**假红**：`ReaderPage` / `ReaderView` 里都有 `const [error, setError]`，
+  // 于是 `error` 被登记成那两个组件的 hook 产物；另一个模块级函数里写
+  // `catch (error)` 就被告成「跨组件作用域泄漏」——
+  // 明明只是它自己的 catch 参数。第一次踩到是 renderCoverBlob。
+  for (const match of text.matchAll(/\bcatch\s*\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)/g)) {
+    names.add(match[1]);
+  }
   // 嵌套函数的**参数名**同样是声明。
   //
   // ⚠️ 这一步必须在**未剔除嵌套体的原文**上做：剔除区间从 `=>` 起算，

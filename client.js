@@ -73,15 +73,29 @@ window.__ModuleLoader__.load({
 .dr-shelf-tools{margin-left:auto;display:flex;gap:8px;align-items:center}
 .dr-grid-scroll{flex:1;min-height:0;overflow:auto;padding:8px 20px 28px}
 .dr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:24px 18px}
-.dr-book{display:flex;flex-direction:column;gap:7px;cursor:pointer;position:relative;border:none;background:transparent;padding:0;text-align:left;font-family:inherit}
-.dr-cover{position:relative;aspect-ratio:2/3;border-radius:5px;overflow:hidden;border:1px solid var(--dsw-alias-border-l1);box-shadow:0 2px 8px rgba(0,0,0,.16);transition:transform .16s ease,box-shadow .16s ease;display:flex;flex-direction:column;justify-content:center;padding:14px 14px 14px 16px;color:#fff}
+/* 整张卡片是容器（不再是 button）：卡片里除了"打开"，还有重命名与删除两个操作，
+   套在一个 button 里会出现"按钮嵌按钮"，点击事件也会互相打架。 */
+.dr-book{display:flex;flex-direction:column;gap:7px;position:relative}
+.dr-book-open{display:flex;flex-direction:column;border:none;background:transparent;padding:0;cursor:pointer;text-align:left;font-family:inherit;-webkit-appearance:none;appearance:none}
+.dr-cover{position:relative;aspect-ratio:2/3;border-radius:5px;overflow:hidden;border:1px solid var(--dsw-alias-border-l1);box-shadow:0 2px 8px rgba(0,0,0,.16);transition:transform .16s ease,box-shadow .16s ease;display:flex;flex-direction:column;justify-content:center;padding:14px 14px 14px 16px;color:#fff;background:var(--dsw-alias-bg-layer-2)}
+.dr-cover.has-image{padding:0}
 .dr-book:hover .dr-cover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,.26)}
+/* 真封面铺满整张卡：object-fit:cover 保证不因页面比例不同而变形 */
+.dr-cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
 .dr-cover-spine{position:absolute;left:0;top:0;bottom:0;width:6px;background:rgba(0,0,0,.3)}
 .dr-cover-title{font-size:13px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
 .dr-cover-mark{position:absolute;right:8px;bottom:9px;font-size:10px;opacity:.9;background:rgba(0,0,0,.32);border-radius:9px;padding:1px 6px}
 .dr-cover-progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(0,0,0,.3)}
 .dr-cover-progress i{display:block;height:100%;background:var(--dsw-alias-brand-primary)}
-.dr-book-name{font-size:12.5px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.dr-book-name-row{display:flex;align-items:flex-start;gap:4px}
+.dr-book-name{font-size:12.5px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;flex:1;min-width:0}
+/* 重命名按钮：默认隐身，悬停才露出来 —— 满屏 ✎ 会显得书架很吵 */
+.dr-book-rename-btn{opacity:0;transition:opacity .12s ease;flex:none}
+.dr-book:hover .dr-book-rename-btn{opacity:1}
+.dr-book-rename-btn:focus-visible{opacity:1}
+/* 重命名输入框：与书名同样的字号，编辑时视觉上不"跳变" */
+.dr-rename-input{width:100%;font-size:12.5px;line-height:1.4;font-family:inherit;padding:3px 6px;border-radius:5px;border:1px solid var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);outline:none}
+.dr-book-rename{width:100%}
 .dr-book-meta{font-size:11px;color:var(--dsw-alias-label-secondary);display:flex;gap:8px;flex-wrap:wrap}
 .dr-book-del{position:absolute;right:-8px;top:-8px;opacity:0;transition:opacity .12s ease}
 .dr-book:hover .dr-book-del{opacity:1}
@@ -509,6 +523,7 @@ window.__ModuleLoader__.load({
       books: () => requestJson('/books'),
       book: (id) => requestJson('/book?id=' + encodeURIComponent(id)),
       fileUrl: (id) => API_BASE + '/file?id=' + encodeURIComponent(id),
+      coverUrl: (id) => API_BASE + '/cover?id=' + encodeURIComponent(id),
       vendorUrl: (name) => API_BASE + '/vendor/' + name,
       importPdf(file) {
         return fetch(API_BASE + '/import?name=' + encodeURIComponent(file.name), {
@@ -548,6 +563,21 @@ window.__ModuleLoader__.load({
        */
       clearMarks: (id, range) => api.post('/clear', range === null ? { id, range: null } : { id, range }),
       removeBook: (id) => api.post('/delete', { id }),
+      /** 重命名。后端会 trim + 合并连续空格，并把空/超长挡掉。 */
+      renameBook: (id, title) => api.post('/rename', { id, title }),
+      /**
+       * 上传封面（PNG 字节），PUT 在宿主里不可用（FetchMethod 只允许 GET/HEAD/POST），
+       * 所以后端把「写封面」挂在同一条 /cover 路由的 POST 上。
+       */
+      async uploadCover(id, blob) {
+        const res = await fetch(API_BASE + '/cover?id=' + encodeURIComponent(id), {
+          method: 'POST',
+          headers: { 'Content-Type': 'image/png' },
+          body: blob,
+        });
+        if (!res.ok) throw new Error('封面保存失败（HTTP ' + res.status + '）');
+        return true;
+      },
       /** 打开 NDJSON 流，逐事件回调。 */
       async stream(path, payload, onEvent, signal) {
         const res = await fetch(API_BASE + path, {
@@ -892,6 +922,67 @@ window.__ModuleLoader__.load({
         [refresh],
       );
 
+      /**
+       * 重命名：返回 true 表示成功。
+       *
+       * 为什么要返回布尔而不是「fire-and-forget」：卡片在失败时要**留在编辑态**。
+       * 悄悄失败的话，用户以为改成功了，下次打开发现还是旧名字 ——
+       * 这跟上一版「写笔记点了没反应」是同一类体验问题。
+       */
+      const rename = useCallback(
+        async (book, title) => {
+          try {
+            const result = await api.renameBook(book.id, title);
+            // 局部更新，不整表刷新：刷新会让书架闪一下，且正在编辑的卡片会被重建
+            setBooks((prev) =>
+              prev.map((item) => (item.id === book.id ? { ...item, title: result.title } : item)),
+            );
+            return true;
+          } catch (e) {
+            setError(e instanceof Error ? e.message : '重命名失败');
+            return false;
+          }
+        },
+        [],
+      );
+
+      /* ── 封面补生成 ─────────────────────────────────────────────────────
+         `hasCover: false` 的书，在书架空闲时**一本一本**补封面。
+
+         为什么要串行 + 空闲：渲染一页 PDF 要几百毫秒到一两秒。
+         一次导入 20 本书，若并发全部渲染，主线程会卡住好几秒，书架像死了。
+         串行 + 一本失败就跳过，保证：① 界面始终能响应 ② 不会因为某一本
+         坏文件让后面 19 本永远生成不出来。 */
+      const coveringRef = useRef(false);
+      useEffect(() => {
+        if (!loaded || books.length === 0) return;
+        const missing = books.filter((book) => !book.hasCover);
+        if (missing.length === 0) return;
+        if (coveringRef.current) return;
+        coveringRef.current = true;
+        let cancelled = false;
+        (async () => {
+          for (const book of missing) {
+            if (cancelled) break;
+            const blob = await renderCoverBlob(book.id);
+            if (!blob) continue;
+            try {
+              await api.uploadCover(book.id, blob);
+              if (cancelled) break;
+              setBooks((prev) =>
+                prev.map((item) => (item.id === book.id ? { ...item, hasCover: true } : item)),
+              );
+            } catch {
+              // 单本上传失败不影响其它书
+            }
+          }
+          coveringRef.current = false;
+        })();
+        return () => {
+          cancelled = true;
+        };
+      }, [loaded, books]);
+
       if (activeId) {
         return h(ReaderView, {
           key: activeId,
@@ -972,7 +1063,15 @@ window.__ModuleLoader__.load({
               : h(
                   'div',
                   { className: 'dr-grid' },
-                  books.map((book) => h(BookCard, { key: book.id, book, onOpen: () => setActiveId(book.id), onRemove: remove })),
+                  books.map((book) =>
+                    h(BookCard, {
+                      key: book.id,
+                      book,
+                      onOpen: () => setActiveId(book.id),
+                      onRemove: remove,
+                      onRename: rename,
+                    }),
+                  ),
                 ),
           ),
           dragOver ? h('div', { className: 'dr-drop' }, '松手导入 PDF') : null,
@@ -989,22 +1088,176 @@ window.__ModuleLoader__.load({
       return 'linear-gradient(150deg,hsl(' + a + ' 44% 42%),hsl(' + b + ' 46% 28%))';
     }
 
+    /* ═══ 封面生成 ═════════════════════════
+
+       封面就是书的**第一页**。看起来理所当然，但有个硬约束：
+       宿主侧的 Node 没有 canvas 模块（`@napi-rs/canvas` / `node-canvas` 都没装），
+       pdf.js 的 `page.render()` 拿不到真正的绘图上下文 —— 服务端渲染封面这条路不通。
+
+       所以封面只能在**浏览器**里画一次，然后上传成 PNG 存进书目录，
+       书架下次直接读这张图。一定要"只画一次"：
+       书架一次显示几十本，每次打开都现渲染几十份 PDF，主线程会直接卡死。
+
+       参数都是经验值，不是随手写的：
+       · 宽 480px —— 卡片在书架上约 110~160px 宽，480 给 3 倍余量，Retina 也够
+       · 高度随页面比例（大多是 2:3），不写死，横版书就不会被拉扁
+       · 画完 `doc.destroy()` —— 不销毁的话 pdf.js 会一直占着那份文件句柄与内存 */
+    const COVER_WIDTH = 480;
+    /** 单张封面图的字节上限，与 store.js 的 MAX_COVER_BYTES 对齐。 */
+    const COVER_MAX_BYTES = 2 * 1024 * 1024;
+
+    /**
+     * 把一本书的第一页渲染成 PNG Blob。
+     * @param {string} bookId
+     * @returns {Promise<Blob|undefined>} 失败返回 undefined（书架退回渐变占位）
+     */
+    async function renderCoverBlob(bookId) {
+      let doc = null;
+      try {
+        const lib = await loadPdfjs();
+        doc = await lib.getDocument({ url: api.fileUrl(bookId) }).promise;
+        const page = await doc.getPage(1);
+        const base = page.getViewport({ scale: 1 });
+        if (!(base.width > 0)) return undefined;
+        const viewport = page.getViewport({ scale: COVER_WIDTH / base.width });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(viewport.width));
+        canvas.height = Math.max(1, Math.round(viewport.height));
+        const context = canvas.getContext('2d');
+        if (!context) return undefined;
+        // 白底：PDF 页面本身是透明的，不铺白底的话 PNG 会是黑底
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: context, viewport }).promise;
+        const blob = await new Promise((resolve) => {
+          canvas.toBlob((result) => resolve(result || undefined), 'image/png');
+        });
+        if (blob && blob.size > COVER_MAX_BYTES) {
+          // 太大说明这页有整页大图，压不住就放弃 —— 后端也会拒收
+          return undefined;
+        }
+        return blob;
+      } catch (error) {
+        console.error('[dsh-reader] 封面生成失败', bookId, error);
+        return undefined;
+      } finally {
+        if (doc) {
+          try {
+            doc.destroy();
+          } catch {
+            /* 已经销毁过了 */
+          }
+        }
+      }
+    }
+
     function BookCard(props) {
-      const { book, onOpen, onRemove } = props;
+      const { book, onOpen, onRemove, onRename } = props;
+      const [renaming, setRenaming] = useState(false);
+      const [draft, setDraft] = useState(book.title);
+      const [coverFailed, setCoverFailed] = useState(false);
       const pct = book.progress && book.progress.pct ? Math.min(100, book.progress.pct) : 0;
-      const pageText = book.pages ? '第 ' + Math.round((book.progress.page || 0) + 1) + ' / ' + book.pages + ' 页' : '未打开';
+
+      // 书名可能在外部被改（重命名成功后父组件刷新了列表），草稿要跟上。
+      // 只在没进入编辑态时同步，否则会打断用户正在输入的内容。
+      useEffect(() => {
+        if (!renaming) setDraft(book.title);
+      }, [book.title, renaming]);
+
+      const commitRename = useCallback(async () => {
+        const next = draft.trim();
+        if (next === '' || next === book.title) {
+          setRenaming(false);
+          setDraft(book.title);
+          return;
+        }
+        const ok = await onRename(book, next);
+        // 失败时保持编辑态，让用户看到错误并改回来（而不是悄悄丢掉输入）
+        if (ok) setRenaming(false);
+      }, [draft, book, onRename]);
+
+      /**
+       * 封面图。`?v=` 带上「有没有封面」的状态和书名 —— 重命名或重新生成后
+       * 浏览器不会拿旧缓存。后端本身是 no-store，这里只是双保险。
+       */
+      const coverSrc = book.hasCover
+        ? api.coverUrl(book.id) + '?v=' + encodeURIComponent(book.title).slice(0, 24)
+        : '';
+
       return h(
-        'button',
-        { className: 'dr-book', onClick: onOpen, title: book.fileName },
+        'div',
+        { className: 'dr-book' },
         h(
-          'div',
-          { className: 'dr-cover', style: { background: coverGradient(book.title) } },
-          h('div', { className: 'dr-cover-spine' }),
-          h('div', { className: 'dr-cover-title' }, book.title),
-          book.markCount ? h('div', { className: 'dr-cover-mark' }, book.markCount + ' 标注') : null,
-          pct > 0 ? h('div', { className: 'dr-cover-progress' }, h('i', { style: { width: pct + '%' } })) : null,
+          'button',
+          {
+            className: 'dr-book-open',
+            onClick: onOpen,
+            title: book.fileName + (book.hasCover ? '' : '（封面待生成）'),
+          },
+          h(
+            'div',
+            {
+              className: 'dr-cover' + (book.hasCover && !coverFailed ? ' has-image' : ''),
+              style: book.hasCover && !coverFailed ? undefined : { background: coverGradient(book.title) },
+            },
+            book.hasCover && !coverFailed
+              ? h('img', {
+                  className: 'dr-cover-img',
+                  src: coverSrc,
+                  alt: book.title,
+                  loading: 'lazy',
+                  decoding: 'async',
+                  onError: () => setCoverFailed(true),
+                })
+              : null,
+            h('div', { className: 'dr-cover-spine' }),
+            // 有真封面时不再压标题文字：那会把书自己的封面盖住
+            book.hasCover && !coverFailed ? null : h('div', { className: 'dr-cover-title' }, book.title),
+            book.markCount ? h('div', { className: 'dr-cover-mark' }, book.markCount + ' 标注') : null,
+            pct > 0 ? h('div', { className: 'dr-cover-progress' }, h('i', { style: { width: pct + '%' } })) : null,
+          ),
         ),
-        h('div', { className: 'dr-book-name' }, book.title),
+        renaming
+          ? h(
+              'div',
+              { className: 'dr-book-rename' },
+              h('input', {
+                className: 'dr-rename-input',
+                value: draft,
+                autoFocus: true,
+                maxLength: 80,
+                onChange: (e) => setDraft(e.target.value),
+                onKeyDown: (e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitRename();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setRenaming(false);
+                    setDraft(book.title);
+                  }
+                },
+                onBlur: () => commitRename(),
+              }),
+            )
+          : h(
+              'div',
+              { className: 'dr-book-name-row' },
+              h('div', { className: 'dr-book-name' }, book.title),
+              h(
+                'button',
+                {
+                  className: 'dr-icon-btn dr-book-rename-btn',
+                  title: '重命名',
+                  onClick: (e) => {
+                    e.stopPropagation();
+                    setDraft(book.title);
+                    setRenaming(true);
+                  },
+                },
+                '✎',
+              ),
+            ),
         h(
           'div',
           { className: 'dr-book-meta' },
