@@ -2,6 +2,11 @@
 # 纯 insert(id/name) 可热挂载，无需重启；Host 半代码改动才需要重启（Node ESM 缓存）。
 # 数据目录不在这里写死：Host 半从 ctx 服务取 dshHome 并回落 ~/.dsh，
 # 硬编码某台机器的路径会让其他机器上插件直接起不来。
+#
+# ⚠️ name 必须加单引号：npm 的 scope 包名以 @ 开头，而 @ 在 YAML 里是保留字符
+# （锚点/别名标记），裸写会被解析器拒绝 ——
+# "found character '@' that cannot start any token"。
+# 引号不是风格问题，去掉就是语法错误。
 - insert:
     - id: dsh-reader
-      name: @rainbowsheepw/dsh-reader
+      name: '@rainbowsheepw/dsh-reader'
