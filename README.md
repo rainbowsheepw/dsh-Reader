@@ -2,7 +2,7 @@
 
 [English](README.en.md) · 简体中文
 
-[![CI](https://github.com/rainbowsheepw/dsh-Reader/actions/workflows/ci.yml/badge.svg)](https://github.com/rainbowsheepw/dsh-Reader/actions/workflows/ci.yml)
+[![CI](https://github.com/rainbowsheepw/dsh-reader/actions/workflows/ci.yml/badge.svg)](https://github.com/rainbowsheepw/dsh-reader/actions/workflows/ci.yml)
 ![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
@@ -51,11 +51,14 @@
 ## 安装
 
 ```bash
-# 在 DSH profile 目录下
+# 从 npm（已发布后可用）
 dsh plugin add @rainbowsheepw/dsh-reader
+
+# 或直接从 GitHub 安装（不需要 npm 账户）
+dsh plugin add github:rainbowsheepw/dsh-reader
 ```
 
-或本地链接开发：
+本地链接开发：
 
 ```bash
 cd <你的 DSH profile>

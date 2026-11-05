@@ -48,7 +48,11 @@ with the AI going back to the PDF itself to read the original text rather than t
 ## Install
 
 ```bash
+# From npm (once published)
 dsh plugin add @rainbowsheepw/dsh-reader
+
+# Or straight from GitHub — no npm account needed
+dsh plugin add github:rainbowsheepw/dsh-reader
 ```
 
 Or link a local checkout for development:
