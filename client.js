@@ -58,7 +58,13 @@ window.__ModuleLoader__.load({
 .dr-btn{display:inline-flex;align-items:center;gap:6px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:5px 11px;font-size:13px;cursor:pointer;transition:border-color .12s ease;font-family:inherit}
 .dr-btn:hover{border-color:var(--dsw-alias-brand-primary)}
 .dr-btn:disabled{opacity:.45;cursor:default}
-.dr-btn.is-primary{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:#fff}
+/* ⚠️ 主按钮必须**成对**使用宿主的按钮 token，不能自己配底色 + 硬编码白字。
+   踩过的坑：写 background:brand-primary 配 color:#fff，在浅色下正常，
+   在深色下 brand-primary 变成 neutral-bluish-50（近白）→ 白底白字，整颗按钮一片白。
+   button-primary-fill 与 label-primary-foreground 是宿主自己配好的一对，
+   深色下自动是「浅底 + 深字」。 */
+.dr-btn.is-primary{background:var(--dsw-alias-button-primary-fill);border-color:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground)}
+.dr-btn.is-primary:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover);border-color:var(--dsw-alias-button-primary-hover)}
 .dr-btn.is-ghost{background:transparent;border-color:transparent}
 .dr-btn.is-ghost:hover{background:var(--dsw-alias-bg-layer-2)}
 .dr-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border-radius:7px;background:transparent;border:1px solid transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font-family:inherit}
@@ -342,8 +348,12 @@ window.__ModuleLoader__.load({
 .dr-clear-btn:hover{border-color:#d05555;color:#d05555}
 .dr-confirm{display:flex;align-items:center;gap:6px;font-size:10.5px;color:#d05555;line-height:1.5;flex-wrap:wrap}
 .dr-confirm button{font-size:10.5px;padding:2px 8px;border-radius:5px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font-family:inherit}
-.dr-confirm button.is-danger{border-color:#d05555;color:#fff;background:#d05555}
-.dr-confirm button.is-danger:hover{background:#bb3f3f}
+/* 危险按钮同理：底色与文字色都要来自 token。
+   固定 #d05555 在深色下偏暗、白字对比不足；用 error-primary 做底、
+   label-primary-foreground 做字，两套主题都由宿主保证对比度。 */
+.dr-confirm button.is-danger{border-color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-label-primary-foreground)}
+/* hover 也走 token：硬编码 #bb3f3f 在深色下比底色更暗，看起来像按钮被按灭了 */
+.dr-confirm button.is-danger:hover{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 82%,black)}
 
 /* 章节级「清除本章」：常态极淡，hover 组头才显现 —— 组头已经很挤，
    常驻按钮会让列表变成按钮墙。 */
@@ -352,7 +362,7 @@ window.__ModuleLoader__.load({
 .dr-group-clear:hover{border-color:#d05555;color:#d05555}
 .dr-group-confirm{display:flex;gap:4px;margin-left:8px;flex:none}
 .dr-group-confirm button{font-size:10px;padding:0 6px;border-radius:4px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font-family:inherit}
-.dr-group-confirm button.is-danger{border-color:#d05555;color:#fff;background:#d05555}
+.dr-group-confirm button.is-danger{border-color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-label-primary-foreground)}
 
 /* 确认态提示：说明「即将删掉几条、范围是什么」，别让人凭记忆点确认 */
 .dr-clear-hint{font-size:10.5px;color:#d05555;line-height:1.55;margin:-4px 0 10px}

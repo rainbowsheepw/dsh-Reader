@@ -230,6 +230,72 @@ for (const name of MUST_HAVE) {
     groupClear ? groupClear[0].slice(0, 80) : '无规则');
 }
 
+/* ══════ 5b. 深色模式对比度：填充按钮必须成对使用 token ══════════════
+
+   一次真实事故：导入 PDF 那颗主按钮在深色主题下**变成一片白**。
+   原因不是漏了样式，而是样式**配错了**：
+
+     .dr-btn.is-primary { background: var(--dsw-alias-brand-primary); color: #fff }
+
+   浅色主题下 brand-primary 是品牌色，白字正常。
+   深色主题下宿主把 --dsw-alias-brand-primary 改成了 neutral-bluish-50（近白），
+   于是「近白底 + 白字」= 一片白。
+
+   ## 判据：不能用「底色 token + 硬编码前景色」
+   宿主的 button-primary-fill 与 label-primary-foreground 是**配好的一对**，
+   两套主题下都保证对比度。凡是 background 用了 token 而 color 写死 #fff
+   （或反过来），就是同一个坑的变体。
+
+   ## 例外：封面
+   .dr-cover 的 color:#fff 是**故意的** —— 它的底色是按书名哈希算出的深色渐变
+   （hsl 44%~46% 亮度、42%~28% 亮度），永远是深色，固定白字才对。
+   这个例外要显式登记，不能靠「反正没报错」蒙过去。 */
+
+{
+  const PAIR_TOKEN = '--dsw-alias-label-primary-foreground';
+  // 找出所有「底色用 token 但前景写死白色」的规则
+  const offenders = [];
+  for (const m of cssNoComments.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const selector = m[1].trim().split('\n').pop().trim();
+    const body = m[2];
+    if (!/background:\s*var\(/.test(body)) continue;
+    if (!/color:\s*#(fff|ffffff)\b/i.test(body)) continue;
+    offenders.push(selector);
+  }
+
+  const ALLOW = ['dr-cover']; // 深色渐变底，见上
+  const real = offenders.filter((sel) => !ALLOW.some((n) => sel.includes('.' + n + '{') || sel.endsWith('.' + n)));
+  check('5b 没有「token 底 + 硬编码白字」的规则（深色会白底白字）',
+    real.length === 0, real.join(' | '));
+
+  // 主按钮必须真的用了那对 token
+  const primary = cssNoComments.match(/\.dr-btn\.is-primary\{([^}]*)\}/);
+  check('5b 主按钮底色用 button-primary-fill',
+    primary && primary[1].includes('--dsw-alias-button-primary-fill'),
+    primary ? primary[1].slice(0, 80) : '无规则');
+  check('5b 主按钮前景用 label-primary-foreground',
+    primary && primary[1].includes(PAIR_TOKEN),
+    primary ? primary[1].slice(0, 80) : '无规则');
+  check('5b 主按钮不再硬编码 #fff',
+    primary && !/color:\s*#fff/i.test(primary[1]),
+    primary ? primary[1].slice(0, 80) : '无规则');
+
+  // 主按钮 hover 也要从 token 来（否则鼠标一上去又露馅）
+  const primaryHover = cssNoComments.match(/\.dr-btn\.is-primary:hover[^{]*\{([^}]*)\}/);
+  check('5b 主按钮 hover 走 token（不是硬编码色）',
+    primaryHover && /--dsw-alias-button-primary-hover/.test(primaryHover[1]),
+    primaryHover ? primaryHover[1].slice(0, 80) : '无 hover 规则');
+
+  // 危险按钮同理
+  const danger = cssNoComments.match(/\.dr-confirm button\.is-danger\{([^}]*)\}/);
+  check('5b 危险按钮底色与字色都来自 token',
+    danger &&
+      danger[1].includes('--dsw-alias-state-error-primary') &&
+      danger[1].includes(PAIR_TOKEN) &&
+      !/color:\s*#fff/i.test(danger[1]),
+    danger ? danger[1].slice(0, 90) : '无规则');
+}
+
 /* ══════ 6. 反向：CSS 里有没有「定义了但没人用」的类 ══════════════════ */
 //
 // 这条只报信息，不算失败 —— 但能帮人发现「某次替换把 JS 里的用法删了、
