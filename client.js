@@ -23,6 +23,27 @@ window.__ModuleLoader__.load({
     const COLOR_NAMES = ['amber', 'green', 'blue', 'rose'];
     const COLOR_LABELS = { amber: '黄', green: '绿', blue: '蓝', rose: '粉' };
 
+    /* ── 阅读缩放 ───────────────────────────────────────────────────────
+       倍数**跟着书走**（存在 meta.progress.scale），不是全局偏好：
+       同一本 300 页的教材和一本 20 页的小册子，舒服的字号本来就不一样。
+
+       三处数值必须一致，改一处就要改另两处：
+         · DEFAULT_SCALE —— 从没设置过时用（store 里存 0 表示"未设置"）
+         · STEP / 上下限 —— 工具栏 +/− 按钮
+         · store.js 的 MIN_SCALE / MAX_SCALE —— 后端夹紧（防止手改 meta 越界）
+       前端也夹一遍，是为了不让 +/− 点到边界后 state 与磁盘不一致。 */
+    const DEFAULT_SCALE = 1.25;
+    const MIN_SCALE = 0.5;
+    const MAX_SCALE = 4;
+    const SCALE_STEP = 0.15;
+
+    /** 夹到合法区间并对齐到两位小数（浮点累加会积出 1.7000000000000002）。 */
+    const clampScale = (value) => {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return DEFAULT_SCALE;
+      return Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.round(n * 100) / 100));
+    };
+
     /* ═══ 样式：全部 --dsw-alias-* token，选择器统一前缀 dr- ═══════════════ */
     const CSS = `/* ── 标注四色：**单一来源** ─────────────────────────────────────────
    这四个色值同时被三处使用：正文划线、侧栏卡片、选区色块按钮。
@@ -511,7 +532,10 @@ window.__ModuleLoader__.load({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         }),
-      saveProgress: (id, page, pct, pages) => api.post('/progress', { id, page, pct, pages }),
+      // scale 可选：只在**要改缩放**时传。页码保存是高频的，绝不带 scale，
+      // 否则每次翻页都会把用户刚设的缩放覆盖成旧值。
+      saveProgress: (id, page, pct, pages, scale) =>
+        api.post('/progress', scale === undefined ? { id, page, pct, pages } : { id, page, pct, pages, scale }),
       saveMark: (id, mark) => api.post('/mark', { id, mark }),
       deleteMark: (id, markId) => api.post('/mark', { id, deleteMarkId: markId }),
       saveNote: (id, note) => api.post('/note', { id, note }),
@@ -1037,7 +1061,7 @@ window.__ModuleLoader__.load({
       const [pdf, setPdf] = useState(null);
       const [pageCount, setPageCount] = useState(0);
       const [page, setPage] = useState(0);
-      const [scale, setScale] = useState(1.25);
+      const [scale, setScale] = useState(DEFAULT_SCALE);
       const [sideOpen, setSideOpen] = useState(true);
       const [sideTab, setSideTab] = useState('framework');
       /** 框架是否处于「扩大」态：扩大后画布铺满阅读区，PDF 暂时让位。 */
@@ -1061,6 +1085,15 @@ window.__ModuleLoader__.load({
             setMarks(state.marks || []);
             setNotes(state.notes || []);
             setFramework(state.framework || { status: 'none', data: null, error: '' });
+            /**
+             * 缩放回填。`scale: 0` 表示这本书从没设置过（见 store.js 注释），
+             * 这时保持组件默认值 —— 不能拿 0 去 clamp，那会变成下限 0.5，
+             * 老书一打开就被缩小，用户会以为设置坏了。
+             */
+            const savedScale = state.progress && state.progress.scale;
+            if (Number.isFinite(savedScale) && savedScale > 0) {
+              setScale(clampScale(savedScale));
+            }
             const startPage = Math.max(0, Math.min((state.progress && state.progress.page) || 0, Math.max(0, (state.pages || 1) - 1)));
             pageRef.current = startPage;
             setPage(startPage);
@@ -1093,6 +1126,67 @@ window.__ModuleLoader__.load({
           alive = false;
         };
       }, [bookId]);
+
+      // ── 缩放落盘 ─────────────────────────────────────────────────────
+      //
+      // ## 为什么单独一条通道，不塞进下面的「进度落盘」
+      //
+      // 进度落盘那个 `lastSaved` 结构是 { at, page, pages }，它只关心页码。
+      // 如果把 scale 塞进去，会立刻死在一个具体场景：
+      //   设成 1.8 → 写入 → 滚动翻页 → 进度落盘用 `lastSaved` 里的旧 page/pages
+      //   拼出请求，而这个请求**不带 scale**……
+      // 后端那边已经做了「不传 scale 就不改 scale」（见 store.js saveProgress），
+      // 所以数据不会坏；但前端这边把两件事塞进一个节流器会让「哪个字段该写」
+      // 变得依赖时序，调试时极难复现。
+      //
+      // 缩放是**低频**操作（用户点几下 +/− 就停），用简单防抖足够：
+      // 连点五下只写一次，停手 800ms 后落盘。
+      // 卸载时补一次 fire-and-forget（与页码那条一样，保证关页面不丢）。
+      const scaleTimer = useRef(null);
+      const scaleRef = useRef(DEFAULT_SCALE);
+      // 记住上次真正写盘的倍数：避免 mount 时那次"回填"被当成用户操作又写一遍。
+      const savedScaleRef = useRef(DEFAULT_SCALE);
+
+      useEffect(() => {
+        scaleRef.current = scale;
+      }, [scale]);
+
+      useEffect(() => {
+        // mount / 回填阶段不写：那时 scale 还是从磁盘读回来的值，写一遍纯属噪音。
+        if (Math.abs(scale - savedScaleRef.current) < 0.001) return;
+        if (scaleTimer.current) clearTimeout(scaleTimer.current);
+        scaleTimer.current = setTimeout(() => {
+          scaleTimer.current = null;
+          savedScaleRef.current = scale;
+          api.saveProgress(bookId, pageRef.current, 0, pageCount, scale).catch(() => {});
+        }, 800);
+        return () => {
+          if (scaleTimer.current) {
+            clearTimeout(scaleTimer.current);
+            scaleTimer.current = null;
+          }
+        };
+      }, [scale, bookId, pageCount]);
+
+      // 关书/切走：把没落盘的那次缩放补上。
+      // 注意这里**不传页码**（page 用 0 会让后端把进度归零），
+      // 所以直接走 POST，只带 scale —— 后端对缺省字段是"保持不变"。
+      useEffect(
+        () => () => {
+          if (scaleTimer.current) {
+            clearTimeout(scaleTimer.current);
+            scaleTimer.current = null;
+          }
+          const pending = scaleRef.current;
+          if (Math.abs(pending - savedScaleRef.current) < 0.001) return;
+          fetch(API_BASE + '/progress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: bookId, scale: pending }),
+          }).catch(() => {});
+        },
+        [bookId],
+      );
 
       // ── 进度落盘 ─────────────────────────────────────────────────────
       //
@@ -1404,9 +1498,9 @@ window.__ModuleLoader__.load({
             h('div', { className: 'dr-spacer' }),
             h('span', { className: 'dr-page-ind' }, pageCount ? page + 1 + ' / ' + pageCount : '…'),
             h('div', { className: 'dr-sep' }),
-            h('button', { className: 'dr-icon-btn', title: '缩小', onClick: () => setScale((s) => Math.max(0.6, +(s - 0.15).toFixed(2))) }, '−'),
+            h('button', { className: 'dr-icon-btn', title: '缩小', onClick: () => setScale((s) => clampScale(s - SCALE_STEP)) }, '−'),
             h('span', { className: 'dr-page-ind', style: { minWidth: 34, textAlign: 'center' } }, Math.round(scale * 100) + '%'),
-            h('button', { className: 'dr-icon-btn', title: '放大', onClick: () => setScale((s) => Math.min(3, +(s + 0.15).toFixed(2))) }, '+'),
+            h('button', { className: 'dr-icon-btn', title: '放大', onClick: () => setScale((s) => clampScale(s + SCALE_STEP)) }, '+'),
             h('div', { className: 'dr-sep' }),
             h(
               'button',
