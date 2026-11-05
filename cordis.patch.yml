@@ -4,4 +4,4 @@
 # 硬编码某台机器的路径会让其他机器上插件直接起不来。
 - insert:
     - id: dsh-reader
-      name: dsh-reader
+      name: @rainbowsheepw/dsh-reader

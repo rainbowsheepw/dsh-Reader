@@ -33,7 +33,7 @@ import { makeRoutes } from './lib/http.js';
 import { resolveLlm } from './lib/llm.js';
 
 /** cordis 插件名（= 包名，patch 里那一行按它 import）。 */
-export const name = 'dsh-reader';
+export const name = '@rainbowsheepw/dsh-reader';
 
 /**
  * 硬依赖为空：`connection` 用 `ctx.inject(['connection'], …)` 显式依赖 —— 它缺失时

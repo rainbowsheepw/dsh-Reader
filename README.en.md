@@ -48,7 +48,7 @@ with the AI going back to the PDF itself to read the original text rather than t
 ## Install
 
 ```bash
-dsh plugin add dsh-reader
+dsh plugin add @rainbowsheepw/dsh-reader
 ```
 
 Or link a local checkout for development:

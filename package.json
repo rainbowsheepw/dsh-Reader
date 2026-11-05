@@ -1,5 +1,5 @@
 {
-  "name": "dsh-reader",
+  "name": "@rainbowsheepw/dsh-reader",
   "version": "0.1.0",
   "type": "module",
   "description": "DSH 阅读器插件：宫格书架 + PDF 精读。文字层标注（精确到字）、四色高亮、阅读进度与缩放记忆、AI 全书框架、选中文字提问。",
@@ -57,10 +57,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_NAME/dsh-reader.git"
+    "url": "https://github.com/rainbowsheepw/dsh-reader.git"
   },
   "bugs": {
-    "url": "https://github.com/YOUR_NAME/dsh-reader/issues"
+    "url": "https://github.com/rainbowsheepw/dsh-reader/issues"
   },
-  "homepage": "https://github.com/YOUR_NAME/dsh-reader#readme"
+  "homepage": "https://github.com/rainbowsheepw/dsh-reader#readme"
 }
