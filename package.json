@@ -1,0 +1,52 @@
+{
+  "name": "dsh-reader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DSH 阅读器：宫格书架 + PDF 精读（文字层标注、四色高亮、进度记忆、AI 全书框架、选中提问）",
+  "icon": "./icon.svg",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/",
+    "vendor/",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-connection"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-host-webserver": "*"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "reader",
+    "pdf",
+    "bookshelf",
+    "annotation"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  }
+}

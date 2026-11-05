@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Reader">
+  <rect x="2" y="2" width="60" height="60" rx="13" fill="#2f6f5e"/>
+  <path d="M32 17c-4.4-4-11.3-4.3-16.6-4.3v28.6c5.3 0 12.2.3 16.6 4.3 4.4-4 11.3-4.3 16.6-4.3V12.7C43.3 12.7 36.4 13 32 17z"
+        fill="none" stroke="#ffffff" stroke-width="3.1" stroke-linejoin="round"/>
+  <path d="M32 17v28.6" fill="none" stroke="#ffffff" stroke-width="3.1" stroke-linecap="round"/>
+  <rect x="17" y="24.5" width="11" height="3" rx="1.5" fill="#ffd666"/>
+  <rect x="17" y="31" width="9" height="3" rx="1.5" fill="#8ce0a4" opacity="0.9"/>
+  <rect x="37" y="24.5" width="11" height="3" rx="1.5" fill="#96c8ff" opacity="0.9"/>
+</svg>

@@ -1,0 +1,7 @@
+# dsh-reader 的 loader patch：把本包作为一条插件行插进 profile roster。
+# 纯 insert(id/name) 可热挂载，无需重启；Host 半代码改动才需要重启（Node ESM 缓存）。
+# 数据目录不在这里写死：Host 半从 ctx 服务取 dshHome 并回落 ~/.dsh，
+# 硬编码某台机器的路径会让其他机器上插件直接起不来。
+- insert:
+    - id: dsh-reader
+      name: dsh-reader
