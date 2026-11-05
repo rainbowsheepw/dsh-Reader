@@ -1,9 +1,8 @@
 {
   "name": "dsh-reader",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "description": "DSH 阅读器：宫格书架 + PDF 精读（文字层标注、四色高亮、进度记忆、AI 全书框架、选中提问）",
+  "description": "DSH 阅读器插件：宫格书架 + PDF 精读。文字层标注（精确到字）、四色高亮、阅读进度与缩放记忆、AI 全书框架、选中文字提问。",
   "icon": "./icon.svg",
   "main": "index.js",
   "exports": {
@@ -20,7 +19,8 @@
     "vendor/",
     "cordis.patch.yml",
     "locale/*.json",
-    "icon.svg"
+    "icon.svg",
+    "CHANGELOG.md"
   ],
   "dsh": {
     "bundle": {
@@ -43,10 +43,24 @@
     "reader",
     "pdf",
     "bookshelf",
-    "annotation"
+    "annotation",
+    "pdfjs",
+    "study"
   ],
   "license": "MIT",
   "engines": {
     "node": ">=22"
-  }
+  },
+  "scripts": {
+    "check": "node scripts/run-all.mjs",
+    "check:syntax": "node --check index.js && node --check client.js && node --check lib/store.js && node --check lib/http.js && node --check lib/llm.js && node --check lib/paths.js && node --check lib/book-text.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_NAME/dsh-reader.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YOUR_NAME/dsh-reader/issues"
+  },
+  "homepage": "https://github.com/YOUR_NAME/dsh-reader#readme"
 }

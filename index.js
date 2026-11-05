@@ -28,7 +28,7 @@
  * `llm` / `agentDefaultModel` **绝不写 inject**：没配模型时 cordis 会把 fiber 停在 pending，
  * 路由一条都不注册 —— 「没配模型」应当只让 AI 功能不可用，不能让书架一起消失。
  */
-import { resolvePaths, isBookId } from './lib/paths.js';
+import { resolvePaths } from './lib/paths.js';
 import { makeRoutes } from './lib/http.js';
 import { resolveLlm } from './lib/llm.js';
 

@@ -27,11 +27,16 @@ window.__ModuleLoader__.load({
        倍数**跟着书走**（存在 meta.progress.scale），不是全局偏好：
        同一本 300 页的教材和一本 20 页的小册子，舒服的字号本来就不一样。
 
-       三处数值必须一致，改一处就要改另两处：
-         · DEFAULT_SCALE —— 从没设置过时用（store 里存 0 表示"未设置"）
-         · STEP / 上下限 —— 工具栏 +/− 按钮
-         · store.js 的 MIN_SCALE / MAX_SCALE —— 后端夹紧（防止手改 meta 越界）
-       前端也夹一遍，是为了不让 +/− 点到边界后 state 与磁盘不一致。 */
+       ⚠️ 上下限在**两个地方**各定义一份，必须同值：
+
+         · 这里（前端）—— 夹 UI state，不让 +/− 点到边界后与磁盘不一致
+         · lib/store.js 的 MIN_SCALE / MAX_SCALE —— 夹磁盘数据，防手改 meta 越界
+
+       为什么不做成单一来源：client 半是纯模块，加载时就要常量，
+       而唯一能下发值的 `/status` 是异步的，时序上来不及。
+
+       所以靠测试守：`scripts/scale-persist-check.mjs` 的 D 段
+       会比对两处的数值，改了一边忘了另一边，测试当场红。 */
     const DEFAULT_SCALE = 1.25;
     const MIN_SCALE = 0.5;
     const MAX_SCALE = 4;

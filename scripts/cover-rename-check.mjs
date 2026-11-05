@@ -237,6 +237,27 @@ function seedBook(paths, extra = {}) {
     CLIENT.includes("className: 'dr-book-open'"), '未拆开');
 }
 
+/* ══════ G. 删书必须释放文档缓存 ═══════════════════════════════════════
+   `book-text.js` 按 id 长期握着打开的 PDF 文档（问答切原文要用）。
+   只删目录不清缓存 = 句柄与内存一直留着，反复导入/删除会稳定泄漏。
+   `forgetDocument` 正是为此存在，但它曾经被 import 了却忘了调用 ——
+   静态检查能发现"导入了没用"，而这里钉住"删书时确实调用了"。 */
+{
+  const deleteAt = HTTP.indexOf("path: '/api/dsh-reader/delete'");
+  check('G 找到 delete 路由', deleteAt >= 0);
+  if (deleteAt >= 0) {
+    const block = HTTP.slice(deleteAt, deleteAt + 700);
+    check('G 删书后调用 forgetDocument（释放 PDF 句柄）',
+      /forgetDocument\(id\)/.test(block), '未调用 —— 会泄漏文档句柄');
+    check('G forgetDocument 先删目录后清缓存',
+      block.indexOf('deleteBook(paths, id)') < block.indexOf('forgetDocument(id)'),
+      '顺序反了（先清缓存再删目录也能工作，但删失败时会白白丢掉缓存）');
+  }
+  // 反向：确认这个函数确实存在且被 import
+  check('G http.js 导入了 forgetDocument',
+    /import\s*\{[^}]*forgetDocument/.test(HTTP), '未导入');
+}
+
 /* ══════ F. 端到端：按前端真实的拼接方式取封面必须 200 ═══════════════
    上面 E 段是静态检查（断言字符串写法），这一段是**真跑**：
    复刻前端的 URL 拼法，交给真路由，看是否 200 且拿到 PNG。
