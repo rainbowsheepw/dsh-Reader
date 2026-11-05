@@ -39,7 +39,11 @@ function check(label, condition, detail) {
 
 {
   const at = clientSrc.indexOf('function AskTab(props)');
-  const end = clientSrc.indexOf('/* ═══ 提问抽屉');
+  // AskTab 是文件里最后一个函数，后面紧接工厂的 return 块。
+  // 早先这里锚在「提问抽屉」的注释上；抽屉删掉后锚点消失，body 切成空串，
+  // 整套断言假红。改用 return 块，不再随某个组件的增删而失配。
+  const END_ANCHOR = '    return {\n      inject:';
+  const end = (() => { const i = clientSrc.indexOf(END_ANCHOR, at); return i < 0 ? clientSrc.length : i; })();
   const body = at >= 0 && end > at ? clientSrc.slice(at, end) : '';
   check('A 找到 AskTab', body.length > 0);
 
@@ -61,7 +65,11 @@ function check(label, condition, detail) {
 
 {
   const at = clientSrc.indexOf('function AskTab(props)');
-  const end = clientSrc.indexOf('/* ═══ 提问抽屉');
+  // AskTab 是文件里最后一个函数，后面紧接工厂的 return 块。
+  // 早先这里锚在「提问抽屉」的注释上；抽屉删掉后锚点消失，body 切成空串，
+  // 整套断言假红。改用 return 块，不再随某个组件的增删而失配。
+  const END_ANCHOR = '    return {\n      inject:';
+  const end = (() => { const i = clientSrc.indexOf(END_ANCHOR, at); return i < 0 ? clientSrc.length : i; })();
   const body = at >= 0 && end > at ? clientSrc.slice(at, end) : '';
 
   check('B 请求里带 history', body.includes('history: historyForRequest'), '未带 history');
@@ -183,7 +191,11 @@ check('E 输入区不滚', /\.dr-qa-composer\{[^}]*flex:none/.test(clientSrc), '
 
 {
   const at = clientSrc.indexOf('function AskTab(props)');
-  const end = clientSrc.indexOf('/* ═══ 提问抽屉');
+  // AskTab 是文件里最后一个函数，后面紧接工厂的 return 块。
+  // 早先这里锚在「提问抽屉」的注释上；抽屉删掉后锚点消失，body 切成空串，
+  // 整套断言假红。改用 return 块，不再随某个组件的增删而失配。
+  const END_ANCHOR = '    return {\n      inject:';
+  const end = (() => { const i = clientSrc.indexOf(END_ANCHOR, at); return i < 0 ? clientSrc.length : i; })();
   const body = at >= 0 ? clientSrc.slice(at, end) : '';
   // 对话框手感：Enter 发送、Shift+Enter 换行
   check('F Enter 发送（无修饰键）',

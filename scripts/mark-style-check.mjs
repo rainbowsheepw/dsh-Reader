@@ -91,9 +91,10 @@ check('样式：深色主题提亮（交给变量层）',
 
 /* ══════ B. 行为：真跑染色 ══════════════════════════════════════════ */
 
-/** 最小 DOM 桩：只实现染色用到的 classList / dataset / children。 */
+/** 最小 DOM 桩：只实现染色用到的 classList / dataset / style / children。 */
 function makeSpan({ start, end }) {
   const classes = new Set();
+  const props = new Map();
   const span = {
     dataset: { drStart: String(start), drEnd: String(end) },
     classList: {
@@ -102,6 +103,16 @@ function makeSpan({ start, end }) {
       contains: (n) => classes.has(n),
       toString: () => [...classes].join(' '),
     },
+    // 部分覆盖的标注用 CSS 自定义属性表达「这一项的哪一段被标」
+    // （--mk-l 左端、--mk-w 宽度、--mk-c 颜色）。桩必须支持 set/removeProperty，
+    // 否则 effect 跑到清场分支就 TypeError。
+    style: {
+      setProperty: (name, value) => props.set(name, String(value)),
+      removeProperty: (name) => props.delete(name),
+      getPropertyValue: (name) => props.get(name) ?? '',
+    },
+    /** 测试用：读某个自定义属性的当前值。 */
+    _get: (name) => props.get(name) ?? '',
   };
   return span;
 }
@@ -124,13 +135,42 @@ function extractColorEffect(code) {
   const head = code.lastIndexOf('useEffect(', at);
   if (head < 0) return null;
   let depth = 0;
-  for (let index = head + 'useEffect'.length; index < code.length; index += 1) {
+  let index = head + 'useEffect'.length;
+  while (index < code.length) {
     const ch = code[index];
+    // 注释、字符串、模板字符串里的括号**不算结构括号**。
+    // 踩过一次：注释里写「区间的 [from, to)」那个半角右括号让配对提前归零，
+    // 抽出来的片段被截断，拼成 `to)] ; return ...` 直接语法错。
+    if (ch === '/' && code[index + 1] === '/') {
+      while (index < code.length && code[index] !== '\n') index += 1;
+      continue;
+    }
+    if (ch === '/' && code[index + 1] === '*') {
+      index += 2;
+      while (index < code.length && !(code[index] === '*' && code[index + 1] === '/')) index += 1;
+      index += 2;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      const quote = ch;
+      index += 1;
+      while (index < code.length) {
+        if (code[index] === '\\') {
+          index += 2;
+          continue;
+        }
+        if (code[index] === quote) break;
+        index += 1;
+      }
+      index += 1;
+      continue;
+    }
     if (ch === '(') depth += 1;
     else if (ch === ')') {
       depth -= 1;
       if (depth === 0) return code.slice(head, index + 1);
     }
+    index += 1;
   }
   return null;
 }

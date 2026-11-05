@@ -393,11 +393,13 @@ if (!sample) {
     check('F1 有序列表是 ol 且 2 项', ol && ol.kids.length === 2, ol ? ol.kids.length : '无');
   }
 
-  // 两处渲染点都必须走渲染器，且不能再有 pre-wrap
-  check('F 问答页签走 renderMarkdown', clientSrc.includes('renderMarkdown(answer)'));
-  // 多轮改造后 AskTab 不再有单一 answer，改为在 turns 里渲染助手消息；
-  // 所以「renderMarkdown(answer)」只剩抽屉那一处。
-  check('F 抽屉仍走 renderMarkdown', clientSrc.includes('renderMarkdown(answer)'));
+  // 所有回答渲染点都必须走渲染器，且不能再有 pre-wrap（会让 ** 等符号漏出来）。
+  // 抽屉删掉之后，「抽屉也走渲染器」这条断言失去对象：它查的字符串与上一条相同，
+  // 两条一起变红只会误导。现在改为断「渲染点数量」与「都在正确的容器里」。
+  check('F 问答页签走 renderMarkdown',
+    /renderMarkdown\(turn\.text\)/.test(clientSrc), '未在多轮消息里渲染');
+  check('F 抽屉已移除（不再有第二个渲染组件）',
+    !clientSrc.includes('function AskDrawer('), '抽屉仍然存在');
   check('F 多轮消息也走 renderMarkdown',
     /renderMarkdown\(turn\.text\)/.test(clientSrc), '未在 turns 渲染里使用');
   check('F 用户消息不走 Markdown（原样显示）',

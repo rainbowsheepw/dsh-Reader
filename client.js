@@ -106,6 +106,12 @@ window.__ModuleLoader__.load({
 .dr-textlayer span.is-marked.is-green{border-bottom-color:var(--dr-green)}
 .dr-textlayer span.is-marked.is-blue{border-bottom-color:var(--dr-blue)}
 .dr-textlayer span.is-marked.is-rose{border-bottom-color:var(--dr-rose)}
+/* 部分覆盖：一段文字项里只有几个字被标。
+   border-bottom 只能画整条，所以这里改用 ::after 画一段。
+   位置用**百分比**而不是像素：span 上带着 scaleX（见渲染 effect），
+   getBoundingClientRect 量到的像素是缩放后的，直接写 px 会被再乘一次缩放。
+   百分比是比例，与缩放无关 —— 这是这里唯一不会错位的方式。 */
+.dr-textlayer span.is-marked-partial::after{content:'';position:absolute;left:var(--mk-l,0);width:var(--mk-w,0);bottom:-1px;height:2.5px;background:var(--mk-c,var(--dr-amber));pointer-events:none}
 
 .dr-loading{display:flex;align-items:center;justify-content:center;flex:1;color:var(--dsw-alias-label-secondary);font-size:13px;gap:12px;flex-direction:column;padding:48px;text-align:center;line-height:1.6}
 .dr-spinner{width:18px;height:18px;border-radius:50%;border:2px solid var(--dsw-alias-border-l2);border-top-color:var(--dsw-alias-brand-primary);animation:dr-spin .8s linear infinite}
@@ -186,6 +192,14 @@ window.__ModuleLoader__.load({
    原值 11.5px + secondary 灰 → 12.5px + 500 字重，颜色略提一档但仍比引文浅，
    让「我写的」比「引文」稍微显眼，又不至于抢过正文引文的位置。 */
 .dr-note-t{font-size:12.5px;line-height:1.65;font-weight:500;color:var(--dsw-alias-label-secondary);white-space:pre-wrap}
+/* 缩略态：全部页面视图里按章堆几十条，必须收紧；引文与笔记**同时**截断，
+   只截一个会让卡片高度忽高忽低，扫一眼看不出哪条是哪条。
+   悬停展开全文（title 属性也带着，触屏靠长按/点开）。
+   用 -webkit-line-clamp 而不是 text-overflow：多行截断只有它能做。 */
+.dr-note.is-mini .dr-note-q,
+.dr-note.is-mini .dr-note-t{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.dr-note.is-mini .dr-note-q{margin-bottom:3px}
+.dr-note.is-mini .dr-note-meta{margin-bottom:3px}
 /* 深色主题下 secondary 本身够亮，字重别再加重，否则发糊 */
 @media (prefers-color-scheme: dark){
   .dr-note-t{font-weight:400;color:var(--dsw-alias-label-primary)}
@@ -328,15 +342,6 @@ window.__ModuleLoader__.load({
 .dr-qa-x{margin-left:auto;border:none;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;font-family:inherit;flex:none}
 .dr-qa-x:hover{color:var(--dsw-alias-label-primary)}
 
-.dr-ask{position:absolute;right:0;top:0;bottom:0;width:384px;max-width:80%;background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l1);box-shadow:-8px 0 24px rgba(0,0,0,.22);display:flex;flex-direction:column;z-index:10}
-.dr-ask-head{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--dsw-alias-border-l1);flex:none}
-.dr-ask-head-title{font-size:13px;font-weight:600}
-.dr-ask-quote{font-size:11.5px;line-height:1.55;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-2);border-radius:7px;padding:7px 9px;margin:10px 12px 0;max-height:112px;overflow:auto;border-left:2.5px solid var(--dsw-alias-brand-primary);white-space:pre-wrap}
-.dr-ask-body{flex:1;min-height:0;overflow:auto;padding:11px 13px;font-size:13px;line-height:1.75;word-break:break-word}
-.dr-ask-input{flex:none;padding:10px 12px;border-top:1px solid var(--dsw-alias-border-l1);display:flex;flex-direction:column;gap:7px}
-.dr-ask-input textarea{resize:none;min-height:58px;font-size:13px;line-height:1.6;font-family:inherit;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:7px 9px;outline:none}
-.dr-ask-input textarea:focus{border-color:var(--dsw-alias-brand-primary)}
-.dr-ask-row{display:flex;gap:7px;align-items:center}
 .dr-dim{font-size:11.5px;color:var(--dsw-alias-label-secondary);padding:10px 0;line-height:1.6}
 .dr-err{font-size:12px;line-height:1.6;color:var(--dsw-alias-state-error-primary);background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 10%,transparent);border-radius:7px;padding:8px 10px;margin:8px 0}
 
@@ -802,28 +807,6 @@ window.__ModuleLoader__.load({
       const [importing, setImporting] = useState('');
       const fileInput = useRef(null);
 
-      /* 当前会话 id：从 main slot 给的 `useSessions` 里挑「主视图正在看的那一条」。
-         判据 `retainedBy.mainView > 0` 与宿主自己的工作区面板同源（不是猜的）。
-         宿主没给这个 hook（老宿主 / 其它 slot）时按「没有当前会话」处理：
-         "送进主对话"按钮会给出可读提示，而不是静默失败。 */
-      const sessionsSnapshot = (() => {
-        try {
-          const useSessions = props && props.useSessions;
-          if (typeof useSessions !== 'function') return null;
-          return useSessions((state) => state);
-        } catch {
-          return null;
-        }
-      })();
-      const currentSessionId = useMemo(() => {
-        const byId = sessionsSnapshot && sessionsSnapshot.byId;
-        if (!byId) return undefined;
-        for (const row of Object.values(byId)) {
-          if (row && row.retainedBy && (row.retainedBy.mainView ?? 0) > 0) return row.id;
-        }
-        return undefined;
-      }, [sessionsSnapshot]);
-
       const refresh = useCallback(async () => {
         try {
           const body = await api.books();
@@ -877,7 +860,6 @@ window.__ModuleLoader__.load({
         return h(ReaderView, {
           key: activeId,
           bookId: activeId,
-          currentSessionId,
           onBack: () => {
             setActiveId(null);
             refresh();
@@ -1037,7 +1019,7 @@ window.__ModuleLoader__.load({
 
     /* ═══ 阅读器 ═══════════════════════════════════════════════════════════ */
     function ReaderView(props) {
-      const { bookId, currentSessionId, onBack } = props;
+      const { bookId, onBack } = props;
       const [book, setBook] = useState(null);
       const [error, setError] = useState('');
       const [pdf, setPdf] = useState(null);
@@ -1048,7 +1030,6 @@ window.__ModuleLoader__.load({
       const [sideTab, setSideTab] = useState('framework');
       /** 框架是否处于「扩大」态：扩大后画布铺满阅读区，PDF 暂时让位。 */
       const [fwExpanded, setFwExpanded] = useState(false);
-      const [ask, setAsk] = useState(null);
       const [marks, setMarks] = useState([]);
       const [notes, setNotes] = useState([]);
       const [framework, setFramework] = useState({ status: 'none', data: null, error: '' });
@@ -1181,11 +1162,8 @@ window.__ModuleLoader__.load({
        */
       const [pendingQA, setPendingQA] = useState(null);
 
-      /** 稳定回调：打开提问抽屉。 */
-      const openAsk = useCallback((payload) => setAsk(payload), []);
-
       /**
-       * 把当前位置送进「问答」页签（而不是打开抽屉）。
+       * 把当前位置送进「问答」页签。
        *
        * payload 里已经带着 offset/length —— 这两个数就是要发给后端的「位置」，
        * 后端据此自己去 PDF 里切原文。text 只用于界面预览。
@@ -1244,7 +1222,6 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         const onKey = (e) => {
           if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
-          if (ask) return;
           if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
             e.preventDefault();
             goPage(pageRef.current + 1);
@@ -1262,7 +1239,7 @@ window.__ModuleLoader__.load({
         // 滚轮完全交给浏览器：连续阅读里「用户自己滚」才是正确的交互，
         // 插件去接管 wheel 只会让人滚不动、还容易和触控板惯性打架。
         return () => document.removeEventListener('keydown', onKey);
-      }, [goPage, onBack, ask, pageCount]);
+      }, [goPage, onBack, pageCount]);
 
       // ── 标注写入 ──────────────────────────────────────────────────────
       //
@@ -1455,8 +1432,7 @@ window.__ModuleLoader__.load({
                   jumpPage: jump.page,
                   onCurrentPage: onScrollPage,
                   onMark: addMark,
-                  onAsk: openAsk,
-                  // 送到侧栏「问答」页签（与 openAsk 的浮层并列的另一个入口）
+                  // 送到侧栏「问答」页签：唯一的提问入口
                   onSendToQA: sendToQA,
                 })
               : h('div', { className: 'dr-stage' }, h('div', { className: 'dr-loading' }, h('div', { className: 'dr-spinner' }), '正在载入 PDF…')),
@@ -1471,7 +1447,6 @@ window.__ModuleLoader__.load({
                   onFramework,
                   marks,
                   notes,
-                  onAskAboutFramework: (question, quote) => setAsk({ question, quote, page }),
                   onGotoMark: (mark) => goPage(mark.page),
                   onSaveNote: saveNote,
                   onDeleteMark: removeMark,
@@ -1505,16 +1480,6 @@ window.__ModuleLoader__.load({
               : null,
           ),
         ),
-        ask
-          ? h(AskDrawer, {
-              initial: ask,
-              book,
-              framework,
-              page,
-              sessionId: currentSessionId,
-              onClose: () => setAsk(null),
-            })
-          : null,
       );
     }
 
@@ -1546,11 +1511,11 @@ window.__ModuleLoader__.load({
      * 连续滚动的整本书视图。
      *
      * @param {{pdf:any, scale:number, pageCount:number, marks:any[],
-     *   onMark:Function, onAsk:Function,
+     *   onMark:Function, onSendToQA:Function,
      *   initialPage:number, onCurrentPage:(n:number)=>void, jumpToken:number, jumpPage:number}} props
      */
     function ContinuousPdf(props) {
-      const { pdf, scale, pageCount, marks, onMark, onAsk, onSendToQA, initialPage, onCurrentPage } = props;
+      const { pdf, scale, pageCount, marks, onMark, onSendToQA, initialPage, onCurrentPage } = props;
       const stageRef = useRef(null);
       /** 外层容器：量可用宽度做窄屏等比缩小。 */
       const wrapRef = useRef(null);
@@ -1903,7 +1868,6 @@ window.__ModuleLoader__.load({
                   marks,
                   onBubble: setBubble,
                   onCommitMark: onMark,
-                  onAsk,
                   onSendToQA,
                 })
               : null,
@@ -1927,10 +1891,8 @@ window.__ModuleLoader__.load({
                 className: 'dr-bubble dr-bubble-fixed',
                 style: { left: bubble.clientLeft, top: bubble.clientTop, transform: 'translateX(-50%)' },
               },
-              h('button', { title: '就这段提问（浮层）', onClick: () => onAsk({ quote: bubble.text, question: '', page: bubble.page, autoFocus: true }) }, '?'),
-              // 「送到问答页签」：把**位置**（page/offset/length）送过去，后端据此读原文。
-              // 与「?」并列是因为两者用途不同：? 是临时问一句；这个是把这段放进侧栏，
-              // 可以接着连问、翻看之前的回答。
+              // 唯一的选区动作：「送到问答页签」，把**位置**（page/offset/length）送过去，
+              // 后端据此自己读原文，可以接着连问、翻看之前的回答。
               h(
                 'button',
                 {
@@ -1984,7 +1946,7 @@ window.__ModuleLoader__.load({
      * 不这么做的话，滚过的页会把 canvas 留在内存里（300 页 = 上百 MB）。
      */
     function PageCanvas(props) {
-      const { pdf, pageIndex, scale, width, marks, onBubble, onCommitMark, onAsk, onSendToQA } = props;
+      const { pdf, pageIndex, scale, width, marks, onBubble, onCommitMark, onSendToQA } = props;
       const canvasRef = useRef(null);
       const layerRef = useRef(null);
       const hostRef = useRef(null);
@@ -2131,10 +2093,14 @@ window.__ModuleLoader__.load({
         if (!layer || !pageText) return;
         const children = layer.children;
         // 先清掉上一次的染色（marks 被删/改色时）
-        for (const span of children) {
-          span.classList.remove('is-marked');
+        const clearSpan = (span) => {
+          span.classList.remove('is-marked', 'is-marked-partial');
           for (const color of COLOR_NAMES) span.classList.remove('is-' + color);
-        }
+          span.style.removeProperty('--mk-l');
+          span.style.removeProperty('--mk-w');
+          span.style.removeProperty('--mk-c');
+        };
+        for (const span of children) clearSpan(span);
         for (const mark of marks) {
           if (mark.page !== pageIndex) continue;
           const end = mark.offset + mark.length;
@@ -2148,7 +2114,25 @@ window.__ModuleLoader__.load({
             // 颜色取决于 CSS 里哪条规则排最后 —— 那是不可预测的。
             // 后一条覆盖前一条是明确规则，所以这里必须先移除。
             for (const color of COLOR_NAMES) span.classList.remove('is-' + color);
-            span.classList.add('is-marked', 'is-' + mark.color);
+            // 这个 span 的字符区间从 from 到 to（左闭右开），与标注区间求交集：
+            const cover = Math.min(to, end) - Math.max(from, mark.offset);
+            const self = to - from;
+            if (cover >= self) {
+              // 整项都在标注内：整条下划线
+              span.classList.add('is-marked', 'is-' + mark.color);
+              span.style.removeProperty('--mk-l');
+              span.style.removeProperty('--mk-w');
+              span.style.removeProperty('--mk-c');
+            } else {
+              // 只覆盖一部分：按字符比例算位置与长度，画一段线
+              // （用户选几个字就只标几个字，两侧不再各多出半句）
+              const left = (Math.max(from, mark.offset) - from) / self;
+              const width = cover / self;
+              span.classList.add('is-marked-partial', 'is-' + mark.color);
+              span.style.setProperty('--mk-l', (left * 100).toFixed(3) + '%');
+              span.style.setProperty('--mk-w', (width * 100).toFixed(3) + '%');
+              span.style.setProperty('--mk-c', 'var(--dr-' + mark.color + ')');
+            }
           }
         }
       }, [marks, pageText, pageIndex]);
@@ -3741,10 +3725,8 @@ function layoutFramework(framework, options = {}) {
     }
 
     /* ═══ 侧栏「问答」页签 ═════════════════════════════════════════════════
-       与 AskDrawer 的分工：
-         · AskDrawer 是「从正文里选中立刻问」的快捷浮层 —— 用完即走；
-         · AskTab 是**常驻**的一栏，可以连问、可以翻看之前的回答。
-       两者共用同一套后端（/ask），差别只在摆放方式。
+       常驻的一栏，可以连问、可以翻看之前的回答。
+       后端走 /ask：前端只发位置（page/offset/length），后端自己读原文。
 
        ## 核心设计：传**位置**，不传文字
 
@@ -4019,259 +4001,9 @@ function layoutFramework(framework, options = {}) {
       );
     }
 
-    /* ═══ 提问抽屉：面板内侧流式回答 ═══════════════════════════════════════ */
-    function AskDrawer(props) {
-      const { initial, book, framework, page, sessionId, onClose } = props;
-      const [sent, setSent] = useState(false);
-      const [quote, setQuote] = useState(initial.quote || '');
-      const [question, setQuestion] = useState(initial.question || '');
-      const [answer, setAnswer] = useState('');
-      const [busy, setBusy] = useState(false);
-      const [error, setError] = useState('');
-      const abortRef = useRef(null);
-      const bodyRef = useRef(null);
-      const inputRef = useRef(null);
-
-      useEffect(() => {
-        if (initial.autoFocus && inputRef.current) inputRef.current.focus();
-      }, [initial.autoFocus]);
-
-      // 抽屉关闭即停掉在跑的请求
-      useEffect(
-        () => () => {
-          if (abortRef.current) abortRef.current.abort();
-        },
-        [],
-      );
-
-      const outline = useMemo(() => {
-        const data = framework && framework.data;
-        if (!data || !data.parts) return '';
-        return data.parts
-          .map((part) => part.name + '：' + (part.chapters || []).map((chapter) => chapter.title).join('、'))
-          .join('\n');
-      }, [framework]);
-
-      /* 送进主对话：拼成一段自带上下文的提问，塞进当前会话草稿并切到对话面板。
-         刻意**不**替用户按发送 —— 他可能要接着改两句措辞。自动发送会让"我还没说完"
-         变成一次已经花掉 token 的请求，这比多一次点击贵得多。 */
-      const sendToConversation = useCallback(() => {
-        const title = book ? book.title : '这本书';
-        const lines = [];
-        lines.push('【来自阅读器】' + title + ' · 第 ' + (page + 1) + ' 页');
-        if (quote) lines.push('原文：「' + quote + '」');
-        if (question) lines.push('问题：' + question);
-        if (answer) lines.push('已得到的回答（供你接着讲，不必重复）：\n' + answer);
-        const text = lines.join('\n\n');
-        if (sendTextToConversation(text, sessionId)) {
-          setSent(true);
-          onClose();
-        } else {
-          setError('没能把文字送进会话草稿：宿主没有可用的会话输入门面。可以先复制这段内容手动粘贴。');
-        }
-      }, [book, page, quote, question, answer, sessionId, onClose]);
-
-      const submit = useCallback(async () => {
-        if (question.trim() === '' || busy) return;
-        setBusy(true);
-        setError('');
-        setAnswer('');
-        const controller = new AbortController();
-        abortRef.current = controller;
-        try {
-          await api.stream(
-            '/ask',
-            {
-              question: question.trim(),
-              quote,
-              bookTitle: book ? book.title : '',
-              page,
-              outline,
-              context: quote,
-            },
-            (event) => {
-              if (event.type === 'delta') {
-                setAnswer((current) => current + event.text);
-                const node = bodyRef.current;
-                if (node) node.scrollTop = node.scrollHeight;
-              } else if (event.type === 'error') {
-                setError(event.message || '回答失败');
-              }
-            },
-            controller.signal,
-          );
-        } catch (e) {
-          if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e));
-        } finally {
-          setBusy(false);
-          abortRef.current = null;
-        }
-      }, [question, quote, busy, book, page, outline]);
-
-      return h(
-        'div',
-        { className: 'dr-ask' },
-        h(
-          'div',
-          { className: 'dr-ask-head' },
-          h('div', { className: 'dr-ask-head-title' }, '解惑'),
-          h('div', { className: 'dr-spacer' }),
-          h('button', { className: 'dr-icon-btn', title: '关闭', onClick: onClose }, '×'),
-        ),
-        quote ? h('div', { className: 'dr-ask-quote' }, quote) : null,
-        h(
-          'div',
-          { className: 'dr-ask-body', ref: bodyRef, 'data-dr-scrollable': '1' },
-          answer
-            ? renderMarkdown(answer)
-            : busy
-              ? ''
-              : h('div', { className: 'dr-hint' }, '问这段为什么这么写、这个术语什么意思、这个公式在整本书里起什么作用 —— 都可以。'),
-          busy && !answer ? h('div', { className: 'dr-dim' }, '思考中…') : null,
-          error ? h('div', { className: 'dr-err' }, error) : null,
-        ),
-        h(
-          'div',
-          { className: 'dr-ask-input' },
-          h('textarea', {
-            ref: inputRef,
-            className: 'dr-input',
-            placeholder: quote ? '这段什么意思？' : '问这本书里的任何问题…',
-            value: question,
-            onChange: (e) => setQuestion(e.target.value),
-            onKeyDown: (e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                submit();
-              }
-            },
-          }),
-          h(
-            'div',
-            { className: 'dr-ask-row' },
-            h('span', { className: 'dr-hint' }, '⌘/Ctrl+Enter 发送'),
-            h('div', { className: 'dr-spacer' }),
-            quote
-              ? h(
-                  'button',
-                  {
-                    className: 'dr-btn is-ghost',
-                    title: '清空引用，改成自由提问',
-                    onClick: () => setQuote(''),
-                  },
-                  '去掉引用',
-                )
-              : null,
-            answer && !busy
-              ? h(
-                  'button',
-                  {
-                    className: 'dr-btn',
-                    title: '把「书名 + 原文 + 问题 + 这段回答」送进主对话，接着深聊',
-                    onClick: () => sendToConversation(),
-                  },
-                  '送进主对话',
-                )
-              : null,
-            h('button', { className: 'dr-btn is-primary', disabled: busy || question.trim() === '', onClick: submit }, busy ? '回答中…' : '提问'),
-          ),
-        ),
-      );
-    }
-
-    /* ═══ 把一次问答送进主对话 ══════════════════════════════════════════ */
-
-    /**
-     * 「送进主对话」需要两件宿主能力，都只能在 `apply(ctx)` 里拿：
-     * `sessions`（找到当前会话的输入门面）与 `layout`（切到对话面板）。
-     *
-     * 分工必须清楚：`layout` 是**注入**（`inject: ['slots','layout']`，它总能拿到），
-     * `sessions` 与 `conversation` 用 `ctx.get` 取 —— 写进 inject 会让 fiber 在缺服务时
-     * 停在 pending，整个面板都不注册。
-     */
-    const hostServices = { sessions: null, conversation: null, layout: null };
-
-    /** 取一件宿主服务：`ctx.get` 优先，`ctx[name]` 兜底，取不到返回 null。 */
-    function hostService(ctx, name) {
-      try {
-        if (ctx && typeof ctx.get === 'function') {
-          const got = ctx.get(name);
-          if (got) return got;
-        }
-      } catch {
-        /* 服务不在：走兜底 */
-      }
-      try {
-        return (ctx && ctx[name]) || null;
-      } catch {
-        return null;
-      }
-    }
-
-    /**
-     * 把一段文本放进指定会话的草稿。
-     *
-     * 顺序有讲究：**先 setDraft，再切面板**。反过来的话，切面板会让输入 shell 重新挂载，
-     * `setDraft` 落在一个已经被换掉的编辑器实例上（草稿看着写进去了，下次渲染就被冲掉）。
-     *
-     * @param {string} text
-     * @param {string|undefined} sessionId - 目标会话；本插件从 `main` slot 的 `useSessions`
-     *   拿到「当前主视图里那一条」（判据 `retainedBy.mainView > 0`，与宿主自己的工作区面板同源）。
-     * @returns {boolean}
-     */
-    function sendTextToConversation(text, sessionId) {
-      const sessions = hostServices.sessions;
-      const conversation = hostServices.conversation;
-      const layout = hostServices.layout;
-      if (!sessionId) return false;
-      if (!sessions || typeof sessions.scope !== 'function') return false;
-      if (!conversation || !conversation.input || typeof conversation.input.for !== 'function') return false;
-
-      let scope = null;
-      try {
-        scope = sessions.scope(sessionId) ?? null;
-      } catch {
-        scope = null;
-      }
-      if (!scope) return false;
-
-      let facade = null;
-      try {
-        facade = conversation.input.for(scope);
-      } catch {
-        return false;
-      }
-      if (!facade) return false;
-
-      let applied = false;
-      try {
-        if (typeof facade.setDraft === 'function') {
-          facade.setDraft(text);
-          applied = true;
-        } else if (typeof facade.insertText === 'function') {
-          facade.insertText(text);
-          applied = true;
-        }
-      } catch {
-        applied = false;
-      }
-      if (!applied) return false;
-
-      try {
-        if (layout && typeof layout.selectPanel === 'function') layout.selectPanel('conversation');
-      } catch {
-        /* 切不过去也没关系，草稿已经在了 */
-      }
-      return true;
-    }
-
     return {
-      inject: ['slots', 'layout'],
+      inject: ['slots'],
       apply(ctx) {
-        hostServices.sessions = hostService(ctx, 'sessions');
-        hostServices.conversation = hostService(ctx, 'conversation');
-        hostServices.layout = hostService(ctx, 'layout');
-
         try {
           installStyles(ctx);
         } catch (error) {
