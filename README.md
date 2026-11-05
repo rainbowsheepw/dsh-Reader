@@ -2,7 +2,7 @@
 
 [English](README.en.md) · 简体中文
 
-[![CI](https://github.com/rainbowsheepw/dsh-reader/actions/workflows/ci.yml/badge.svg)](https://github.com/rainbowsheepw/dsh-reader/actions/workflows/ci.yml)
+[![CI](https://github.com/rainbowsheepw/dsh-Reader/actions/workflows/ci.yml/badge.svg)](https://github.com/rainbowsheepw/dsh-Reader/actions/workflows/ci.yml)
 ![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
