@@ -108,11 +108,14 @@ window.__ModuleLoader__.load({
    两者都是比例量，所以缩放、字号变化都不会让线重新爬回字里。
 
    bottom 必须让到 descender 之外：本行字号约 15~22px，下伸笔画溢出盒底
-   约 0.1~0.15em，所以让 0.18em 才稳（不是 1px 那种凭感觉的微调 ——
-   上一版 padding-bottom:1px 就是这么在标题上失效的）。
+   约 0.1~0.15em。让位量 0.24em 是**留有余量**的取值 —— 不是算出来的下限，
+   是用户在手感上按「再往下一点点」定下来的。
+   下限（0.15em）只是安全线，实际值故意比它大，让线看起来更像纸书上的一条
+   clean 分隔线，而不是贴在字底的一道边。
+   （上一版 padding-bottom:1px 的教训是：固定像素补比例量，大字号必失效。）
    线粗也用 em 夹一个 2px 下限，标题的线才不会看起来比正文还细。 */
 .dr-textlayer span.is-marked::after,
-.dr-textlayer span.is-marked-partial::after{content:'';position:absolute;left:var(--mk-l,0);width:var(--mk-w,100%);bottom:-0.18em;height:max(2px,0.085em);background:var(--mk-c,var(--dr-amber));border-radius:1px;pointer-events:none}
+.dr-textlayer span.is-marked-partial::after{content:'';position:absolute;left:var(--mk-l,0);width:var(--mk-w,100%);bottom:-0.24em;height:max(2px,0.085em);background:var(--mk-c,var(--dr-amber));border-radius:1px;pointer-events:none}
 .dr-textlayer span.is-marked.is-amber,
 .dr-textlayer span.is-marked-partial.is-amber{--mk-c:var(--dr-amber)}
 .dr-textlayer span.is-marked.is-green,

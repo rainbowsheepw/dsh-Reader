@@ -79,11 +79,20 @@ check('样式：不再用 .dr-mark 独立层', !css.includes('.dr-mark::after'))
 check('样式：线的横向用百分比（span 带 scaleX，像素会被二次缩放）',
   /left:var\(--mk-l,0\)/.test(css) && /width:var\(--mk-w,100%\)/.test(css), '未用百分比');
 check('样式：线的纵向让到盒外用 em（字号越大让得越多）',
-  /bottom:-0\.18em/.test(css), '未用 em 让位');
-check('样式：让位量够过 descender（≥0.15em）', (() => {
+  /bottom:-[0-9.]+em/.test(css), '未用 em 让位');
+// 让位量是**手感值**，会随用户观感微调（「再往下一点点」就是一次）。
+// 所以这里断区间而不是某个具体数字 —— 写死数值的断言会在每次调样式时变红，
+// 那种红没有信息量，只会训练人忽略测试。
+// 区间下限有物理含义（必须过 descender），上限只是防止有人调到离谱的位置。
+const lineDrop = (() => {
   const m = css.match(/bottom:-([0-9.]+)em/);
-  return Boolean(m) && Number(m[1]) >= 0.15;
-})(), '让得太少，线会压进下伸笔画');
+  return m ? Number(m[1]) : null;
+})();
+check('样式：让位量在合理区间（0.15em ≤ x ≤ 0.40em）',
+  lineDrop !== null && lineDrop >= 0.15 && lineDrop <= 0.4,
+  lineDrop === null ? '未找到' : lineDrop + 'em');
+check('样式：让位量高于 descender 下限（0.15em）',
+  lineDrop !== null && lineDrop >= 0.15, '让得太少，线会压进下伸笔画');
 check('样式：线粗有 2px 下限（标题不至于比正文更细）',
   /height:max\(2px,0\.085em\)/.test(css), '未夹下限');
 // 注释里提到历史做法是允许的（那里写着「上一版用 mix-blend-mode」），
