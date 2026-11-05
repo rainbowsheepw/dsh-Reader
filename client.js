@@ -1187,11 +1187,22 @@ window.__ModuleLoader__.load({
       }, [draft, book, onRename]);
 
       /**
-       * 封面图。`?v=` 带上「有没有封面」的状态和书名 —— 重命名或重新生成后
-       * 浏览器不会拿旧缓存。后端本身是 no-store，这里只是双保险。
+       * 封面图 URL。
+       *
+       * ⚠️ 拼查询参数必须用 `&`，**不能用 `?`**：`coverUrl()` 返回的
+       * `/cover?id=xxx` 里已经有一个问号了。写成 `coverUrl(id) + '?v=' + ...`
+       * 会得到 `?id=xxx?v=nndl-ge` —— 浏览器的 searchParams 把整个
+       * `xxx?v=nndl-ge` 当作 id，后端校验不过直接 400。
+       *
+       * 这个坑之所以能藏住，是因为 `<img>` 加载失败**不会抛异常**：
+       * 浏览器只触发一次 onError，卡片静默退回渐变占位 —— 界面正常、
+       * 控制台干净、只有封面永远不出现。print 一行 console 都没有。
+
+       * `v=` 的作用是重命名/重新生成后不吃旧缓存（后端本身也是 no-store，
+       * 这里只是双保险）。
        */
       const coverSrc = book.hasCover
-        ? api.coverUrl(book.id) + '?v=' + encodeURIComponent(book.title).slice(0, 24)
+        ? api.coverUrl(book.id) + '&v=' + encodeURIComponent(book.title).slice(0, 24)
         : '';
 
       return h(

@@ -218,10 +218,62 @@ function seedBook(paths, extra = {}) {
   check('E 重命名局部更新列表（不整表刷新闪烁）',
     /setBooks\(\(prev\) =>\s*\n\s*prev\.map\(\(item\) => \(item\.id === book\.id \? \{ \.\.\.item, title: result\.title \}/.test(CLIENT),
     '未局部更新');
+  // 封面 URL 的拼接方式：必须用 & 追加参数，不能用 ?
+  //
+  // 这里踩过一个**极难发现**的坑：coverUrl() 已经返回 `/cover?id=xxx`，
+  // 再加 `?v=` 就得到 `?id=xxx?v=nndl-ge`。浏览器把整个 `xxx?v=nndl-ge`
+  // 当成 id，后端校验不过返回 400 —— 而 <img> 加载失败不抛异常，
+  // 只触发一次 onError，卡片静默退回渐变占位。
+  // 结果是「功能全对、界面全静、封面永远不出现」，控制台一行都不报。
+  check('E 封面 URL 用 & 追加参数（不能用 ?，会得到双问号）',
+    CLIENT.includes("api.coverUrl(book.id) + '&v='"),
+    '用了 ? —— 会拼成 ?id=xxx?v=yyy，后端 400');
+  check('E 封面 URL 没有 ?v= 的双问号写法',
+    !CLIENT.includes("api.coverUrl(book.id) + '?v='"),
+    '仍存在双问号拼接');
   check('E 封面 URL 带失效参数（重命名后不拿旧图）',
-    CLIENT.includes("api.coverUrl(book.id) + '?v='"), '未带版本参数');
+    CLIENT.includes("+ '&v=' + encodeURIComponent(book.title)"), '未带版本参数');
   check('E 卡片不再是 button 套 button',
     CLIENT.includes("className: 'dr-book-open'"), '未拆开');
+}
+
+/* ══════ F. 端到端：按前端真实的拼接方式取封面必须 200 ═══════════════
+   上面 E 段是静态检查（断言字符串写法），这一段是**真跑**：
+   复刻前端的 URL 拼法，交给真路由，看是否 200 且拿到 PNG。
+   只有这一段能证明「用户真的能看到图」。 */
+{
+  const { makeRoutes } = await import('../lib/http.js');
+  const { resolvePaths } = await import('../lib/paths.js');
+
+  const paths = tempPaths();
+  seedBook(paths);
+  await saveCover(paths, ID, new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+
+  const logger = { warn: () => {} };
+  const routes = makeRoutes({ paths, logger });
+  const cover = routes.find((r) => r.path === '/api/dsh-reader/cover');
+  check('F 能找到 /cover 路由', Boolean(cover));
+
+  if (cover) {
+    const API_BASE = '/api/dsh-reader';
+    const coverUrl = (id) => API_BASE + '/cover?id=' + encodeURIComponent(id);
+
+    // ① 前端现在的写法（&）
+    const good = 'http://x' + coverUrl(ID) + '&v=' + encodeURIComponent('书名').slice(0, 24);
+    const goodRes = await cover.fetch(new Request(good, { method: 'GET' }), {});
+    check('F 前端拼接（&）取封面得 200', goodRes.status === 200, 'HTTP ' + goodRes.status);
+    check('F 响应是 image/png',
+      goodRes.headers.get('content-type') === 'image/png',
+      goodRes.headers.get('content-type'));
+
+    // ② 旧写法（?）必须是 400 —— 钉住这个坑，防止有人"简化"回去
+    const bad = 'http://x' + coverUrl(ID) + '?v=' + encodeURIComponent('书名').slice(0, 24);
+    const badRes = await cover.fetch(new Request(bad, { method: 'GET' }), {});
+    check('F 旧的双问号写法确实会 400（不是猜的）',
+      badRes.status === 400, 'HTTP ' + badRes.status);
+  }
+
+  rmSync(paths.dir, { recursive: true, force: true });
 }
 
 console.log('\n' + pass + ' pass, ' + fail + ' fail');
